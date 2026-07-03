@@ -1,0 +1,42 @@
+{
+  "name": "opencode-tmux-repl",
+  "version": "0.1.0",
+  "description": "Shared tmux REPL tools for OpenCode. Drive any prompt-shaped REPL (guile, python, ipython, nix, bash, ...) from the agent.",
+  "type": "module",
+  "main": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "files": ["src"],
+  "license": "MIT",
+  "keywords": ["opencode", "opencode-plugin", "tmux", "repl", "guile", "ipython", "python", "nix", "bash"],
+  "author": "Daniel Fahey",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/daniel-fahey/opencode-tmux-repl.git"
+  },
+  "bugs": { "url": "https://github.com/daniel-fahey/opencode-tmux-repl/issues" },
+  "homepage": "https://github.com/daniel-fahey/opencode-tmux-repl",
+  "engines": { "opencode": "^1.0.0" },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint src/ test/",
+    "knip": "knip",
+    "check-circular": "madge --circular --extensions ts src/index.ts"
+  },
+  "dependencies": {
+    "@opencode-ai/plugin": "^1.0.0",
+    "@xterm/headless": "^5.5.0"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.0.0",
+    "@types/bun": "^1.3.14",
+    "eslint": "^9.0.0",
+    "eslint-plugin-sonarjs": "^3.0.0",
+    "fast-check": "^4.0.0",
+    "knip": "^5.0.0",
+    "madge": "^8.0.0",
+    "typescript": "^5.8.0",
+    "typescript-eslint": "^8.0.0"
+  }
+}
