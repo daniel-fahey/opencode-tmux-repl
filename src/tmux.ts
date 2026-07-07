@@ -30,18 +30,10 @@ function lastNonEmptyIdx(lines: string[]): number {
   return i - 1
 }
 
-const stripPrompt = (line: string, m: Mode): string =>
-  line.replace(m.prompt, "").replace(m.continuation ?? /$/g, "")
-
-function stripEchoNoise(slice: string[], m: Mode, form: string): void {
-  if (!m.continuation) return
-  const multiLine = form.includes("\n")
-  for (let i = 1; i < slice.length; i++) {
-    if (!m.continuation.test(slice[i])) break
-    if (!multiLine && stripPrompt(slice[i], m).trim() !== "") break
-    slice.splice(i, 1)
-    i--
-  }
+const stripPrompt = (line: string, m: Mode): string => {
+  const withoutPrompt = line.replace(m.prompt, "")
+  if (withoutPrompt !== line) return withoutPrompt
+  return m.continuation ? line.replace(m.continuation, "") : line
 }
 
 /** Detect readiness from rendered text. */
@@ -53,7 +45,6 @@ export function findReady(text: string, form: string, m: Mode): { ready: boolean
   if (fp < 0) return { ready: false, result: "" }
   if (hasInterveningPrompt(lines, { m, from: fp + 1, to: last })) return { ready: false, result: "" }
   const slice = lines.slice(fp, last + 1)
-  stripEchoNoise(slice, m, form)
   while (slice.length && slice[slice.length - 1].trim() === "") slice.pop()
   return { ready: true, result: slice.join("\n") }
 }
@@ -252,10 +243,9 @@ export class ReplManager {
     let repl: Repl
     try { repl = await this.get(mode, false) } catch (e) { void e; return `no session ${this.session(mode)} on -L${this.socket}` }
     if (resync) await this.reconcile(repl)
-    const m = this.modes[mode]
     const all = repl.screen.render()
       .split("\n")
-      .filter((line) => line.trim().length > 0 && !(m.continuation?.test(line) ?? false))
+      .filter((line) => line.trim().length > 0)
     return all.slice(-lines).join("\n")
   }
 

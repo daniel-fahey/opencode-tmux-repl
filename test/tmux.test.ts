@@ -22,6 +22,7 @@ const MODE_SYNTAX: Record<string, { arith: (a: number, b: number) => string; tim
   ipython: { arith: (a, b) => `${a} + ${b}`, timeout: 60000 },
   nix: { arith: (a, b) => `${a} + ${b}` },
   bash: { arith: (a, b) => `echo $(( ${a} + ${b} ))` },
+  r: { arith: (a, b) => `${a} + ${b}` },
 }
 
 const assertArithProperty = async (mgr: ReplManager, mode: string, arith: (a: number, b: number) => string, numRuns: number) => {
@@ -245,7 +246,7 @@ test(
 )
 
 test(
-  "invariant: read() output contains no prompt/continuation echo lines",
+  "invariant: read() output includes continuation echoes for multi-line forms",
   async () => {
     const m = resolveModes({}).ipython
     await fc.assert(
@@ -254,9 +255,8 @@ test(
         try {
           await mgr.send("ipython", `x = ${n}\nprint(x)`, ac().signal)
           const buf = await mgr.read("ipython", 50)
-          for (const line of buf.split("\n")) {
-            if (m.continuation?.test(line) ?? false) throw new Error(`continuation leaked: "${line}"`)
-          }
+          const hasContinuation = buf.split("\n").some(line => m.continuation?.test(line) ?? false)
+          expect(hasContinuation).toBe(true)
         } finally {
           await mgr.kill("ipython")
         }

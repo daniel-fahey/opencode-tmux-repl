@@ -8,6 +8,7 @@
   python3,
   nix,
   bash,
+  R,
   jscpd,
   importNpmLock,
 }:
@@ -42,6 +43,7 @@ buildNpmPackage (finalAttrs: {
     (python3.withPackages (ps: [ ps.ipython ]))
     nix
     bash
+    R
     jscpd
   ];
   buildPhase = ''

@@ -59,6 +59,15 @@ const BUILTINS: Record<string, ModeConfig> = {
     ready: String.raw`bash-\d+\.\d+\$ ?$`,
     continuation: String.raw`^> ?`,
   },
+  r: {
+    // --no-save/--no-restore avoid the exit-time "Save workspace image?" prompt
+    // that would hang the session; --quiet suppresses the ~15-line startup
+    // banner so the first ready prompt arrives clean.
+    command: ["R", "--no-save", "--no-restore", "--quiet"],
+    prompt: String.raw`> `,
+    ready: String.raw`> ?$`,
+    continuation: String.raw`^\+ ?`,
+  },
 }
 
 function compileMode(name: string, cfg: Partial<ModeConfig>): Mode {
