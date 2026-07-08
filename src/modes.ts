@@ -68,6 +68,15 @@ const BUILTINS: Record<string, ModeConfig> = {
     ready: String.raw`> ?$`,
     continuation: String.raw`^\+ ?`,
   },
+  mit: {
+    // --no-init-file avoids loading ~/.scheme.ini for a predictable prompt.
+    // MIT Scheme has no continuation prompt — multi-line expressions are read
+    // silently. The level-prefixed prompt `N ]=> ` is distinctive enough that
+    // `;Value:` output lines never false-match.
+    command: ["mit-scheme", "--no-init-file"],
+    prompt: String.raw`\d+ \]=> `,
+    ready: String.raw`\d+ \]=> ?$`,
+  },
 }
 
 function compileMode(name: string, cfg: Partial<ModeConfig>): Mode {

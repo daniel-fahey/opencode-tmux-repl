@@ -23,6 +23,7 @@ const MODE_SYNTAX: Record<string, { arith: (a: number, b: number) => string; tim
   nix: { arith: (a, b) => `${a} + ${b}` },
   bash: { arith: (a, b) => `echo $(( ${a} + ${b} ))` },
   r: { arith: (a, b) => `${a} + ${b}` },
+  mit: { arith: (a, b) => `(+ ${a} ${b})` },
 }
 
 const assertArithProperty = async (mgr: ReplManager, mode: string, arith: (a: number, b: number) => string, numRuns: number) => {

@@ -9,7 +9,7 @@
   },
   "files": ["src"],
   "license": "MIT",
-  "keywords": ["opencode", "opencode-plugin", "tmux", "repl", "guile", "ipython", "python", "nix", "bash", "r"],
+  "keywords": ["opencode", "opencode-plugin", "tmux", "repl", "guile", "ipython", "python", "nix", "bash", "r", "mit-scheme"],
   "author": "Daniel Fahey",
   "repository": {
     "type": "git",

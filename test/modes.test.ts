@@ -2,7 +2,7 @@ import { test, expect } from "bun:test"
 import fc from "fast-check"
 import { resolveModes } from "../src/modes.js"
 
-const BUILTIN_NAMES = ["guile", "python", "ipython", "nix", "bash", "r"]
+const BUILTIN_NAMES = ["guile", "python", "ipython", "nix", "bash", "r", "mit"]
 const validRegexArb = fc.string({ minLength: 1, maxLength: 20 }).filter((s) => {
   try { new RegExp(s); return true } catch { return false }
 })
@@ -108,4 +108,26 @@ test("r continuation regex matches lines starting with '+' (with optional traili
     ),
     { numRuns: 1000 },
   )
+})
+
+// MIT Scheme built-in: command avoids loading user config; no continuation
+// (MIT Scheme reads multi-line expressions silently, no continuation prompt).
+test("resolveModes includes mit with mit-scheme command and no continuation", () => {
+  const modes = resolveModes({})
+  expect(modes.mit).toBeDefined()
+  expect(modes.mit.command[0]).toBe("mit-scheme")
+  expect(modes.mit.continuation).toBeUndefined()
+})
+
+// MIT Scheme's prompt is `<level> ]=> ` where level is a digit (1 normally,
+// increments in debugger). The ready regex `\d+ \]=> ?$` must match this but
+// NOT match MIT's `;Value: 3` output lines.
+test("mit ready regex discriminates the N ]=> prompt from ;Value: output lines", () => {
+  const m = resolveModes({}).mit
+  for (const line of ["1 ]=> ", "1 ]=>", "2 ]=> ", "10 ]=> "]) {
+    expect(m.ready.test(line)).toBe(true)
+  }
+  for (const line of [";Value: 3", "]=> ", "a ]=> ", "1]=> ", "1 ]=> x"]) {
+    expect(m.ready.test(line)).toBe(false)
+  }
 })

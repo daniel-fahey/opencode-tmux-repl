@@ -9,6 +9,7 @@
   nix,
   bash,
   R,
+  mitscheme,
   jscpd,
   importNpmLock,
 }:
@@ -44,6 +45,7 @@ buildNpmPackage (finalAttrs: {
     nix
     bash
     R
+    mitscheme
     jscpd
   ];
   buildPhase = ''

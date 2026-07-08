@@ -1,62 +1,66 @@
 import { test, expect } from "bun:test"
 import fc from "fast-check"
 import { findReady } from "../src/tmux.js"
-import { resolveModes } from "../src/modes.js"
+import { resolveModes, type Mode } from "../src/modes.js"
 
 const guile = resolveModes({}).guile
 const bash = resolveModes({}).bash
 const ipython = resolveModes({}).ipython
 const r = resolveModes({}).r
+const mit = resolveModes({}).mit
 const PROMPT = "scheme@(guile-user)> "
 const R_PROMPT = "> "
+const MIT_PROMPT = "1 ]=> "
 const N = { numRuns: 5000 }
 
 const formArb = fc.string({ minLength: 1, maxLength: 30 }).filter((s) => !s.includes("scheme@") && !s.includes("\n") && s.trim().length > 0)
 const outputArb = fc.string({ maxLength: 50 }).filter((s) => !s.includes("scheme@") && !s.includes("\n"))
 
-// SOUNDNESS: for any buffer ending in a ready prompt where the queried form is
-// NOT exactly echoed at a prompt line, findReady returns not-ready. Subsumes:
-// not-a-prompt, different-form-echoed, prefix-collision (substring ≠ exact).
-test("SOUNDNESS: not ready when the queried form is not exactly echoed", () => {
-  const bufArb = fc.array(
-    fc.oneof(outputArb, formArb.map((f) => `${PROMPT}${f}`)),
-    { minLength: 0, maxLength: 6 },
-  ).map((lines) => [...lines, PROMPT].join("\n"))
-  fc.assert(fc.property(bufArb, formArb, (text, form) => {
-    const firstForm = form.trim().split("\n")[0].trim()
-    const hasExactEcho = text.split("\n").some((l) =>
-      guile.prompt.test(l) && l.replace(guile.prompt, "").trim() === firstForm)
-    fc.pre(!hasExactEcho)
-    expect(findReady(text, form, guile).ready).toBe(false)
-  }), N)
-})
-
-// FAITHFULNESS: for any buffer where the queried form IS echoed, findReady
-// returns ready with the result preserving all genuine output after the most
-// recent echo (including continuation-shaped output). Subsumes: basic ready,
-// most-recent-echo anchoring, continuation-output preservation.
-test("FAITHFULNESS: ready + result preserves genuine output after the most recent echo", () => {
-  const genuineOutput = fc.oneof(outputArb, fc.stringMatching(/^\.\.\. \S{1,30}$/))
-  fc.assert(fc.property(
-    formArb, genuineOutput, genuineOutput, fc.integer({ min: 0, max: 2 }),
-    (form, oldOut, newOut, oldEchoCount) => {
-      fc.pre(
-        oldOut.trim() !== "" && newOut.trim() !== "" &&
-        oldOut !== newOut &&
-        !newOut.includes(oldOut) && !oldOut.includes(newOut) &&
-        !oldOut.includes(form) && !newOut.includes(form) &&
-        !form.includes(oldOut) && !form.includes(newOut) &&
-        !(PROMPT + form).includes(oldOut) && !(PROMPT + form).includes(newOut),
-      )
-      const lines: string[] = []
-      for (let i = 0; i < oldEchoCount; i++) { lines.push(`${PROMPT}${form}`, oldOut) }
-      lines.push(`${PROMPT}${form}`, newOut, PROMPT)
-      const r = findReady(lines.join("\n"), form, guile)
-      expect(r.ready).toBe(true)
-      expect(r.result).toContain(newOut)
-      if (oldEchoCount > 0) expect(r.result).not.toContain(oldOut)
+// Deeper-property consolidation: SOUNDNESS and FAITHFULNESS are universal
+// properties holding for every mode. The helpers generate the test bodies,
+// eliminating per-mode duplication.
+function soundnessTest(label: string, mode: Mode, prompt: string, fArb: fc.Arbitrary<string>, oArb: fc.Arbitrary<string>) {
+  test(`SOUNDNESS (${label}): not ready when the queried form is not exactly echoed`, () => {
+    const bufArb = fc.array(
+      fc.oneof(oArb, fArb.map((f) => `${prompt}${f}`)),
+      { minLength: 0, maxLength: 6 },
+    ).map((lines: string[]) => [...lines, prompt].join("\n"))
+    fc.assert(fc.property(bufArb, fArb, (text, form) => {
+      const firstForm = form.trim().split("\n")[0].trim()
+      const hasExactEcho = text.split("\n").some((l) =>
+        mode.prompt.test(l) && l.replace(mode.prompt, "").trim() === firstForm)
+      fc.pre(!hasExactEcho)
+      expect(findReady(text, form, mode).ready).toBe(false)
     }), N)
-})
+  })
+}
+
+function faithfulnessTest(label: string, mode: Mode, prompt: string, fArb: fc.Arbitrary<string>, gen: fc.Arbitrary<string>) {
+  test(`FAITHFULNESS (${label}): ready + result preserves genuine output after the most recent echo`, () => {
+    fc.assert(fc.property(
+      fArb, gen, gen, fc.integer({ min: 0, max: 2 }),
+      (form, oldOut, newOut, oldEchoCount) => {
+        fc.pre(
+          oldOut.trim() !== "" && newOut.trim() !== "" &&
+          oldOut !== newOut &&
+          !newOut.includes(oldOut) && !oldOut.includes(newOut) &&
+          !oldOut.includes(form) && !newOut.includes(form) &&
+          !form.includes(oldOut) && !form.includes(newOut) &&
+          !(prompt + form).includes(oldOut) && !(prompt + form).includes(newOut),
+        )
+        const lines: string[] = []
+        for (let i = 0; i < oldEchoCount; i++) { lines.push(`${prompt}${form}`, oldOut) }
+        lines.push(`${prompt}${form}`, newOut, prompt)
+        const result = findReady(lines.join("\n"), form, mode)
+        expect(result.ready).toBe(true)
+        expect(result.result).toContain(newOut)
+        if (oldEchoCount > 0) expect(result.result).not.toContain(oldOut)
+      }), N)
+  })
+}
+
+soundnessTest("guile", guile, PROMPT, formArb, outputArb)
+faithfulnessTest("guile", guile, PROMPT, formArb, fc.oneof(outputArb, fc.stringMatching(/^\.\.\. \S{1,30}$/)))
 
 // A3: an intervening form (with content) between the anchor and the ready prompt
 // means the anchor is stale — findReady must return not-ready.
@@ -111,49 +115,8 @@ const rFormArb = fc.string({ minLength: 1, maxLength: 30 }).filter((s) =>
 const rOutputArb = fc.string({ maxLength: 50 }).filter((s) =>
   !s.includes(">") && !s.includes("\n"))
 
-// SOUNDNESS (R): for any buffer ending in a ready prompt where the queried form
-// is NOT exactly echoed at a prompt line, findReady returns not-ready. Same
-// shape as the guile Soundness property, exercised against R's short-prompt
-// regex — the discriminating concern is that `[1] 5`-style output lines or
-// arbitrary text don't false-match the form-anchor.
-test("SOUNDNESS (R): not ready when the queried form is not exactly echoed", () => {
-  const bufArb = fc.array(
-    fc.oneof(rOutputArb, rFormArb.map((f) => `${R_PROMPT}${f}`)),
-    { minLength: 0, maxLength: 6 },
-  ).map((lines) => [...lines, R_PROMPT].join("\n"))
-  fc.assert(fc.property(bufArb, rFormArb, (text, form) => {
-    const firstForm = form.trim().split("\n")[0].trim()
-    const hasExactEcho = text.split("\n").some((l) =>
-      r.prompt.test(l) && l.replace(r.prompt, "").trim() === firstForm)
-    fc.pre(!hasExactEcho)
-    expect(findReady(text, form, r).ready).toBe(false)
-  }), N)
-})
-
-// FAITHFULNESS (R): for any buffer where the queried form IS echoed, findReady
-// returns ready with the result preserving all genuine output after the most
-// recent echo.
-test("FAITHFULNESS (R): ready + result preserves genuine output after the most recent echo", () => {
-  const genuineOutput = fc.oneof(rOutputArb, fc.stringMatching(/^\+ \S{1,30}$/))
-  fc.assert(fc.property(
-    rFormArb, genuineOutput, genuineOutput, fc.integer({ min: 0, max: 2 }),
-    (form, oldOut, newOut, oldEchoCount) => {
-      fc.pre(
-        oldOut.trim() !== "" && newOut.trim() !== "" &&
-        oldOut !== newOut &&
-        !newOut.includes(oldOut) && !oldOut.includes(newOut) &&
-        !oldOut.includes(form) && !newOut.includes(form) &&
-        !form.includes(oldOut) && !form.includes(newOut),
-      )
-      const lines: string[] = []
-      for (let i = 0; i < oldEchoCount; i++) { lines.push(`${R_PROMPT}${form}`, oldOut) }
-      lines.push(`${R_PROMPT}${form}`, newOut, R_PROMPT)
-      const result = findReady(lines.join("\n"), form, r)
-      expect(result.ready).toBe(true)
-      expect(result.result).toContain(newOut)
-      if (oldEchoCount > 0) expect(result.result).not.toContain(oldOut)
-    }), N)
-})
+soundnessTest("R", r, R_PROMPT, rFormArb, rOutputArb)
+faithfulnessTest("R", r, R_PROMPT, rFormArb, fc.oneof(rOutputArb, fc.stringMatching(/^\+ \S{1,30}$/)))
 
 // PLUS-PREFIX OUTPUT (R): `+`-prefixed output (e.g. cat("+abc") → "+abc") is
 // preserved — nothing is stripped between echo and ready prompt.
@@ -201,3 +164,16 @@ test("CONTINUATION-CHAR FORM (R): form starting with `+` is matched when echoed 
     expect(findReady(text, form, r).ready).toBe(true)
   }), N)
 })
+
+// -- MIT Scheme ---------------------------------------------------------------
+// MIT Scheme's prompt is `N ]=> ` (level number + ` ]=> `). Output uses
+// `;Value:` prefix. No continuation prompt — multi-line expressions are read
+// silently. The `]=>` in the prompt is distinctive enough that output lines
+// (starting with `;`) won't false-match.
+const mitFormArb = fc.string({ minLength: 1, maxLength: 30 }).filter((s) =>
+  !s.includes("]=>") && !s.includes("\n") && s.trim().length > 0)
+const mitOutputArb = fc.string({ maxLength: 50 }).filter((s) =>
+  !s.includes("]=>") && !s.includes("\n"))
+
+soundnessTest("MIT", mit, MIT_PROMPT, mitFormArb, mitOutputArb)
+faithfulnessTest("MIT", mit, MIT_PROMPT, mitFormArb, fc.oneof(mitOutputArb, fc.stringMatching(/^;Value: \S{1,30}$/)))
